@@ -1,0 +1,379 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extractor de Artículos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+    .header { background: #1a1a2e; padding: 20px; text-align: center; border-bottom: 2px solid #16213e; }
+    .header h1 { font-size: 1.5rem; color: #00d2ff; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .input-area { margin-bottom: 20px; }
+    .url-row { display: flex; gap: 10px; margin-bottom: 15px; }
+    .url-row input { flex: 1; padding: 12px 15px; background: #1a1a2e; border: 1px solid #333; color: #e0e0e0; border-radius: 8px; font-size: 0.9rem; }
+    .url-row input:focus { outline: none; border-color: #00d2ff; }
+    .loading { display: none; text-align: center; padding: 20px; color: #00d2ff; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #333; border-top-color: #00d2ff; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .info-box { background: #16213e; border: 1px solid #333; border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; font-size: 0.85rem; color: #aaa; line-height: 1.6; }
+    .info-box b { color: #00d2ff; }
+    textarea { width: 100%; height: 200px; background: #1a1a2e; border: 1px solid #333; color: #e0e0e0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
+    textarea:focus { outline: none; border-color: #00d2ff; }
+    .btn-row { display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; }
+    .btn-primary { background: #00d2ff; color: #000; }
+    .btn-primary:hover { background: #00b8e6; }
+    .btn-secondary { background: #333; color: #fff; }
+    .btn-secondary:hover { background: #444; }
+    .btn-success { background: #00c853; color: #000; }
+    .btn-success:hover { background: #00a844; }
+    .results { display: none; }
+    .section { background: #1a1a2e; border-radius: 10px; padding: 20px; margin-bottom: 20px; border: 1px solid #333; }
+    .section h2 { color: #00d2ff; margin-bottom: 15px; font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    .meta { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
+    .meta-item { background: #16213e; padding: 10px 15px; border-radius: 6px; font-size: 0.85rem; }
+    .meta-item span { color: #888; }
+    .text-content { line-height: 1.7; font-size: 0.95rem; }
+    .text-content p { margin-bottom: 12px; }
+    .images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+    .img-card { background: #16213e; border-radius: 8px; overflow: hidden; border: 1px solid #333; }
+    .img-card.broken { display: none; }
+    .img-card img { width: 100%; height: 200px; object-fit: cover; display: block; }
+    .img-card .img-info { padding: 10px; font-size: 0.75rem; color: #888; word-break: break-all; }
+    .img-card .img-info a { color: #00d2ff; text-decoration: none; }
+    .img-card .img-info a:hover { text-decoration: underline; }
+    .stats { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+    .stat { background: #16213e; padding: 8px 14px; border-radius: 20px; font-size: 0.8rem; }
+    .stat b { color: #00d2ff; }
+    .copy-btn { position: absolute; top: 8px; right: 8px; background: #00d2ff; color: #000; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+    .text-wrapper { position: relative; }
+    .error { color: #ff6b6b; padding: 10px; background: #2a1a1a; border-radius: 6px; display: none; margin-bottom: 15px; border: 1px solid #ff6b6b33; }
+    .proxy-status { font-size: 0.75rem; color: #666; margin-top: 5px; }
+    .download-progress { display: none; margin-top: 10px; font-size: 0.85rem; color: #00d2ff; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Extractor de Artículos</h1>
+  </div>
+  <div class="container">
+    <div class="input-area">
+      <div class="url-row">
+        <input type="url" id="urlInput" placeholder="https://ejemplo.com/articulo-de-noticia">
+        <button class="btn-primary" onclick="fetchFromURL()">Descargar</button>
+      </div>
+      <div class="loading" id="loading"><span class="spinner"></span> Descargando contenido...</div>
+      <div class="error" id="error"></div>
+      <div class="proxy-status" id="proxyStatus"></div>
+      <div class="info-box">
+        <b>Opción manual:</b> Si la descarga automática falla, abre la página en tu navegador, presiona <b>Ctrl+U</b> para ver el código fuente, copia todo (<b>Ctrl+A, Ctrl+C</b>) y pega en el cuadro de abajo.
+      </div>
+      <textarea id="htmlInput" placeholder="El HTML aparecerá aquí al descargar desde URL, o pega tu HTML manualmente..."></textarea>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="extract()">Extraer Contenido</button>
+        <button class="btn-secondary" onclick="document.getElementById('htmlInput').value=''; document.getElementById('results').style.display='none';">Limpiar</button>
+      </div>
+    </div>
+
+    <div class="results" id="results">
+      <div class="section">
+        <h2>Estadísticas</h2>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="section">
+        <h2>Información del Artículo</h2>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="section">
+        <h2>Imágenes</h2>
+        <div class="btn-row" id="imgButtons" style="display:none;">
+          <button class="btn-success" onclick="downloadAllImages()">Descargar imágenes (ZIP)</button>
+        </div>
+        <div class="download-progress" id="downloadProgress"></div>
+        <div class="images-grid" id="images"></div>
+      </div>
+      <div class="section text-wrapper">
+        <h2>Texto del Artículo</h2>
+        <button class="copy-btn" onclick="copyText()">Copiar texto</button>
+        <div class="text-content" id="textContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    const CORS_PROXIES = [
+      { name: 'CorsAnywhere', build: url => `https://cors-anywhere.com/${url}` },
+      { name: 'CorsLol', build: url => `https://api.cors.lol/?url=${encodeURIComponent(url)}` },
+      { name: 'Syrins', build: url => `https://api.cors.syrins.tech/?url=${encodeURIComponent(url)}` },
+      { name: 'AllOrigins', build: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+      { name: 'CodeTabs', build: url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
+    ];
+
+    let validImages = [];
+
+    async function fetchWithProxy(url, index) {
+      const proxy = CORS_PROXIES[index];
+      const proxyUrl = proxy.build(url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        if (!text || text.length < 50) throw new Error('Respuesta muy corta o vacía');
+        if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('<HTML')) return text;
+        throw new Error('No se devolvió HTML válido');
+      } catch (e) {
+        clearTimeout(timeout);
+        throw e;
+      }
+    }
+
+    async function fetchFromURL() {
+      const url = document.getElementById('urlInput').value.trim();
+      const errorEl = document.getElementById('error');
+      const loadingEl = document.getElementById('loading');
+      const textarea = document.getElementById('htmlInput');
+      const proxyStatusEl = document.getElementById('proxyStatus');
+
+      if (!url) {
+        errorEl.textContent = 'Por favor, ingresa una URL.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      try { new URL(url); } catch {
+        errorEl.textContent = 'URL no válida. Asegúrate de incluir http:// o https://';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      errorEl.style.display = 'none';
+      loadingEl.style.display = 'block';
+      proxyStatusEl.textContent = '';
+
+      for (let i = 0; i < CORS_PROXIES.length; i++) {
+        proxyStatusEl.textContent = `Probando ${CORS_PROXIES[i].name}...`;
+        try {
+          const html = await fetchWithProxy(url, i);
+          loadingEl.style.display = 'none';
+          proxyStatusEl.textContent = `Descargado con ${CORS_PROXIES[i].name}`;
+          textarea.value = html;
+          extract();
+          return;
+        } catch (e) {
+          proxyStatusEl.textContent = `${CORS_PROXIES[i].name} falló: ${e.message}`;
+        }
+      }
+
+      loadingEl.style.display = 'none';
+      errorEl.innerHTML = 'No se pudo descargar. Todos los proxies fallaron.<br>Prueba a abrir la página, presionar <b>Ctrl+U</b>, copiar todo y pegarlo abajo.';
+      errorEl.style.display = 'block';
+    }
+
+    document.getElementById('urlInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') fetchFromURL();
+    });
+
+    function extract() {
+      const input = document.getElementById('htmlInput').value.trim();
+      const errorEl = document.getElementById('error');
+      const resultsEl = document.getElementById('results');
+
+      if (!input) {
+        errorEl.textContent = 'Por favor, pega el HTML del artículo.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      errorEl.style.display = 'none';
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(input, 'text/html');
+
+      const unwanted = doc.querySelectorAll('script, style, nav, footer, aside, .ad, .advertisement, .social-share, .related, .comments');
+      unwanted.forEach(el => el.remove());
+
+      const imgElements = doc.querySelectorAll('img');
+      const images = [];
+      imgElements.forEach(img => {
+        const src = img.src || img.dataset.src || img.getAttribute('data-lazy-src') || '';
+        const alt = img.alt || '';
+        if (src && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar') && !src.includes('pixel') && !src.includes('1x1') && !src.includes('1x1')) {
+          images.push({ src, alt });
+        }
+      });
+
+      validImages = [];
+      const titleEl = doc.querySelector('h1') || doc.querySelector('title') || doc.querySelector('.title') || doc.querySelector('[class*="title"]');
+      const title = titleEl ? titleEl.textContent.trim() : '';
+
+      const authorEl = doc.querySelector('[rel="author"]') || doc.querySelector('.author') || doc.querySelector('[class*="author"]') || doc.querySelector('meta[name="author"]');
+      let author = authorEl ? (authorEl.content || authorEl.textContent.trim()) : '';
+
+      const dateEl = doc.querySelector('time') || doc.querySelector('[class*="date"]') || doc.querySelector('meta[property="article:published_time"]');
+      let date = dateEl ? (dateEl.getAttribute('datetime') || dateEl.content || dateEl.textContent.trim()) : '';
+
+      const descEl = doc.querySelector('meta[property="og:description"]') || doc.querySelector('meta[name="description"]');
+      const description = descEl ? descEl.content : '';
+
+      const articleEl = doc.querySelector('article') || doc.querySelector('[class*="article"]') || doc.querySelector('[class*="content"]') || doc.querySelector('[class*="body"]') || doc.querySelector('main') || doc.body;
+      const paragraphs = articleEl.querySelectorAll('p, h2, h3, h4, blockquote');
+      const textParts = [];
+      paragraphs.forEach(p => {
+        const text = p.textContent.trim();
+        if (text.length > 10) textParts.push({ tag: p.tagName, text });
+      });
+
+      const totalChars = textParts.reduce((sum, p) => sum + p.text.length, 0);
+      const totalWords = textParts.reduce((sum, p) => sum + p.text.split(/\s+/).length, 0);
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat"><b id="imgCount">${images.length}</b> imágenes</div>
+        <div class="stat"><b>${textParts.length}</b> párrafos</div>
+        <div class="stat"><b>${totalWords.toLocaleString()}</b> palabras</div>
+        <div class="stat"><b>${totalChars.toLocaleString()}</b> caracteres</div>
+      `;
+
+      document.getElementById('meta').innerHTML = `
+        ${title ? `<div class="meta-item"><span>Título:</span> ${title}</div>` : ''}
+        ${author ? `<div class="meta-item"><span>Autor:</span> ${author}</div>` : ''}
+        ${date ? `<div class="meta-item"><span>Fecha:</span> ${date}</div>` : ''}
+        ${description ? `<div class="meta-item"><span>Descripción:</span> ${description}</div>` : ''}
+      `;
+
+      const imagesEl = document.getElementById('images');
+      const imgButtonsEl = document.getElementById('imgButtons');
+      const downloadProgressEl = document.getElementById('downloadProgress');
+      downloadProgressEl.style.display = 'none';
+
+      if (images.length === 0) {
+        imagesEl.innerHTML = '<p style="color:#666;">No se encontraron imágenes.</p>';
+        imgButtonsEl.style.display = 'none';
+      } else {
+        imgButtonsEl.style.display = 'flex';
+        imagesEl.innerHTML = images.map((img, i) => `
+          <div class="img-card" data-idx="${i}" data-src="${img.src}">
+            <img src="${img.src}" alt="${img.alt}" onload="onImgLoad(this)" onerror="onImgError(this)">
+            <div class="img-info">
+              <div>${img.alt || 'Sin descripción'}</div>
+              <a href="${img.src}" target="_blank">${img.src.substring(0, 80)}${img.src.length > 80 ? '...' : ''}</a>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      const textEl = document.getElementById('textContent');
+      if (textParts.length === 0) {
+        textEl.innerHTML = '<p style="color:#666;">No se encontró texto.</p>';
+      } else {
+        textEl.innerHTML = textParts.map(p => {
+          if (p.tag === 'H2' || p.tag === 'H3' || p.tag === 'H4')
+            return `<h3 style="color:#00d2ff; margin: 15px 0 8px;">${p.text}</h3>`;
+          if (p.tag === 'BLOCKQUOTE')
+            return `<blockquote style="border-left:3px solid #00d2ff; padding-left:15px; color:#aaa; margin:10px 0;">${p.text}</blockquote>`;
+          return `<p>${p.text}</p>`;
+        }).join('');
+      }
+
+      resultsEl.style.display = 'block';
+      resultsEl.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function onImgLoad(img) {
+      const card = img.closest('.img-card');
+      const src = card.dataset.src;
+      if (!validImages.find(v => v.src === src)) {
+        validImages.push({ src, alt: card.querySelector('.img-info div').textContent });
+      }
+      document.getElementById('imgCount').textContent = validImages.length;
+    }
+
+    function onImgError(img) {
+      const card = img.closest('.img-card');
+      card.classList.add('broken');
+    }
+
+    async function fetchImgBlob(imgUrl) {
+      for (let p = 0; p < CORS_PROXIES.length; p++) {
+        try {
+          const proxyUrl = CORS_PROXIES[p].build(imgUrl);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          const response = await fetch(proxyUrl, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (response.ok) {
+            const blob = await response.blob();
+            if (blob.size > 100) return blob;
+          }
+        } catch {}
+      }
+      return null;
+    }
+
+    async function downloadAllImages() {
+      const progressEl = document.getElementById('downloadProgress');
+      progressEl.style.display = 'block';
+
+      if (validImages.length === 0) {
+        progressEl.textContent = 'No hay imágenes válidas para descargar.';
+        return;
+      }
+
+      const zip = new JSZip();
+      let count = 0;
+      const total = validImages.length;
+
+      const batchSize = 5;
+      for (let b = 0; b < total; b += batchSize) {
+        const batch = validImages.slice(b, b + batchSize);
+        const promises = batch.map(async (img, i) => {
+          const idx = b + i + 1;
+          const blob = await fetchImgBlob(img.src);
+          if (blob) {
+            const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+            const name = (img.alt || `imagen_${idx}`).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+            zip.file(`${name}.${ext}`, blob);
+            count++;
+          }
+          progressEl.textContent = `Descargando ${Math.min(b + batchSize, total)} de ${total}... (${count} válidas)`;
+        });
+        await Promise.all(promises);
+      }
+
+      if (count === 0) {
+        progressEl.textContent = 'No se pudo descargar ninguna imagen.';
+        return;
+      }
+
+      progressEl.textContent = `Comprimiendo ${count} imágenes...`;
+      const content = await zip.generateAsync({ type: 'blob' }, (meta) => {
+        progressEl.textContent = `Comprimiendo... ${meta.percent.toFixed(0)}%`;
+      });
+
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'imagenes_articulo.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      progressEl.textContent = `Descarga completada: ${count} imágenes en imagen_articulo.zip`;
+    }
+
+    function copyText() {
+      const text = document.getElementById('textContent').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        btn.textContent = 'Copiado';
+        setTimeout(() => btn.textContent = 'Copiar texto', 2000);
+      });
+    }
+  </script>
+</body>
+</html>
